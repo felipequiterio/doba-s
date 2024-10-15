@@ -1,0 +1,13 @@
+- Adicionar lista de agentes no prompt
+
+- Criar todo agent
+- Criar funcoes de todo
+
+-------------------
+
+- Refatorar llm.py como lib:
+    - llm.task
+    - llm.query
+
+- Refatorar arquitetura de agents e tools
+
