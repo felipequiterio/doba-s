@@ -1,0 +1,18 @@
+{
+    "tasks": {
+        "2024-10-15": [
+            {
+                "task_id": 1,
+                "task_description": "clean my room",
+                "status": "pending",
+                "created_at": "2024-10-15T01:11:40.614835"
+            },
+            {
+                "task_id": 2,
+                "task_description": "Buy groceries",
+                "status": "pending",
+                "created_at": "2024-10-15T01:25:30.739454"
+            }
+        ]
+    }
+}
