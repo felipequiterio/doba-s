@@ -3,14 +3,14 @@ import ollama
 from dotenv import load_dotenv
 
 load_dotenv()
-MODEL = os.getenv("MODEL")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
 
-def sync(message):
+def stream(message):
     formatted_message = {"role": "user", "content": message}
 
     stream = ollama.chat(
-        model=MODEL,
+        model=OLLAMA_MODEL,
         messages=[formatted_message],
         stream=True,
     )

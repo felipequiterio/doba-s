@@ -1,0 +1,47 @@
+services:
+  llm-api:
+    build:
+      context: ..
+      dockerfile: ci/Dockerfile
+    container_name: llm_api
+    command: start.py
+    environment:
+      - MODEL_NAME=neuralmind/bert-base-portuguese-cased
+      - HUGGING_FACE_HUB_TOKEN=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
+      - PG_VECTOR_URL=postgresql://llm:llm@question_embedding/question_embedding
+      - NEO4J_URL=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=strongpassword123
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8080:8080"
+    depends_on:
+      llm-database:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: "exit 0"
+
+  llm-database:
+    image: gcr.io/iptv-cluster/pgvector:v-0.0.1
+    container_name: question_embedding
+    environment:
+      POSTGRES_USER: llm
+      POSTGRES_PASSWORD: llm
+      POSTGRES_DB: question_embedding
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: "exit 0"
+
+  neo4j:
+    image: gcr.io/iptv-cluster/neo4j-custom/neo4j-5.24-0.0.1
+    container_name: neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/strongpassword123
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    healthcheck:
+      test: "exit 0"

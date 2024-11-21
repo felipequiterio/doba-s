@@ -1,204 +1,166 @@
-import json
 import os
-from typing import List, Dict, Any
-import ollama
+import json
+from typing import List
+from llm.agent import Agent
+from pydantic import BaseModel
 from dotenv import load_dotenv
-from pydantic import BaseModel, ValidationError
-from llm import _get_arguments as get_arguments
-from llm.agent import AgentManager
+from llm.invoke import ollama_invoke
+from llm import get_arguments as get_arguments
 from utils.log import get_custom_logger
 
 load_dotenv()
 MODEL = os.getenv("MODEL")
-
 logger = get_custom_logger("TASK")
 
-
 tasks_payload = {
-    "type": "function",
-    "function": {
-        "name": "route_agent",
-        "description": "Route the query to one or multiple agents, handling single or multi-step tasks.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "steps": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "step_number": {
-                                "type": "integer",
-                                "description": "The step number of the query (starting from 1)",
-                            },
-                            "task": {
-                                "type": "string",
-                                "description": "Task description the agent needs to complete",
-                            },
-                            "agent": {
-                                "type": "string",
-                                "description": "The agent responsible for this task",
-                            },
-                            "expected_output": {
-                                "type": "string",
-                                "description": "What output is expected after completion of the task",
-                            },
-                            "is_async": {
-                                "type": "boolean",
-                                "description": "Whether this task should be performed asynchronously",
-                            },
+    "name": "route_agent",
+    "description": "Route the query to one or multiple agents, handling single or multi-step tasks.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "steps": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "step_number": {
+                            "type": "integer",
+                            "description": "The step number of the query (starting from 1)",
                         },
-                        "required": ["step_number", "task", "agent"],
+                        "task": {
+                            "type": "string",
+                            "description": "Task description the agent needs to complete",
+                        },
+                        "agent": {
+                            "type": "string",
+                            "description": "The agent responsible for this task",
+                        },
+                        "expected_output": {
+                            "type": "string",
+                            "description": "What output is expected after completion of the task",
+                        },
+                        "is_async": {
+                            "type": "boolean",
+                            "description": "Whether this task should be performed asynchronously",
+                        },
                     },
-                }
-            },
-            "required": ["steps"],
+                    "required": ["step_number", "task", "agent"],
+                },
+            }
         },
+        "required": ["steps"],
     },
 }
 
 
-class Step(BaseModel):
+class Task(BaseModel):
     step_number: int
     task: str
     agent: str
     expected_output: str
-    is_async: bool = False
+    is_async: bool
 
 
 class TaskList(BaseModel):
-    steps: List[Step]
+    steps: List[Task]
 
 
-def generate(message):
-    logger.info("Generating tasks")
-    system = {
+def generate(message, agent_list: List[Agent]) -> TaskList:
+    agents_available = "\n".join(
+        [
+            f"- **Name**: `{agent.name}`\n  **Description**: {agent.description}"
+            for agent in agent_list
+        ]
+    )
+
+    system = system = {
         "role": "system",
-        "content": """
-You are an intelligent assistant responsible for routing queries to the appropriate agents.
-Your task is to analyze the user's request and generate a structured plan using the provided tool.
-You must always use the 'route_agent' function to output your response.
+        "content": f"""
+                You are an intelligent assistant responsible for routing queries to the appropriate agents.
+                When a query is simple and can be handled by a single agent, route it directly to that agent with the necessary task information.
+                
+                For complex queries that require multiple steps or involve multiple agents:
+                - Identify each step needed to complete the query. Each step should be a distinct task with a specific goal.
+                - Assign a unique `step_number` to each task, starting from 1, indicating the order of execution.
+                - Choose the most appropriate `agent` for each task, based on the task's requirements and the agent's capabilities.
+                - For tasks that need to be executed asynchronously, set `is_async` to `true`. This will indicate that the task can be completed independently without blocking other tasks.
+                - For each task, clearly describe the expected outcome in `expected_output`. This will guide the agent on the form and content of the response.
+                
+                If a task is complex and requires further subdivision, split it into smaller tasks that can be routed to the same agent or different agents. 
+                Provide the complete list of subtasks and the order in which they should be executed.
 
-Instructions:
-1. Analyze the user's query.
-2. Determine the necessary steps to complete the query.
-3. For each step, provide ALL of the following information:
-   - step_number: An integer starting from 1
-   - task: A detailed description of what needs to be done
-   - agent: The name of the agent responsible for this task (use 'todo_agent' for todo list related tasks)
-   - expected_output: What should be produced after completing this task
-   - is_async: Whether this task can be performed asynchronously (true or false)
-4. Use the 'route_agent' function to structure your response.
+                Ensure that the output structure follows this format:
+                - `steps`: an array containing each task, where each task includes:
+                    - `step_number`: the step in the sequence
+                    - `task`: a detailed description of the task to be completed
+                    - `agent`: the agent designated to handle the task
+                    - `expected_output`: a description of what the agent should provide after completing the task
+                    - `is_async`: whether this task is asynchronous
+                    
+                Example:
+                [
+                    {{
+                        "step_number": 1,
+                        "task": "Fetch the current weather for New York City",
+                        "agent": "weather_agent",
+                        "expected_output": "Current weather conditions in New York City",
+                        "is_async": false
+                    }},
+                    {{
+                        "step_number": 2,
+                        "task": "Add 'Buy groceries' to the user's to-do list",
+                        "agent": "todo_agent",
+                        "expected_output": "Confirmation that 'Buy groceries' was added to the to-do list",
+                        "is_async": true
+                    }}
+                ]
 
-Remember: You must always use the 'route_agent' function and include ALL required fields for each step.
-Do not respond in any other format.
-        """,
+                Available agents:
+                {agents_available}
+                """,
     }
 
     user = {"role": "user", "content": message}
+    logger.info(f"Sending task generation request with message: {message}")
 
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        response = ollama.chat(
-            model=MODEL,
-            messages=[system, user],
-            tools=[tasks_payload],
-        )
+    response = ollama_invoke(system, user, tasks_payload)
 
-        logger.info(f"LLM response (attempt {attempt + 1}): {response}")
+    tasks = json.loads(response["steps"])
 
-        if "tool_calls" in response["message"]:
-            try:
-                args = get_arguments(response)
-                steps = args.get("steps")
-                if isinstance(steps, str):
-                    steps = json.loads(steps)
+    tasks_list = {"steps": tasks}
 
-                # Attempt to fix and validate the structure
-                fixed_steps = []
-                for i, step in enumerate(steps, start=1):
-                    fixed_step = {
-                        "step_number": step.get("step_number", i),
-                        "task": step.get("task", step.get("task_description", "")),
-                        "agent": step.get("agent", step.get("agent_id", "todo_agent")),
-                        "expected_output": step.get("expected_output", ""),
-                        "is_async": step.get("is_async", False),
-                    }
-                    fixed_steps.append(Step(**fixed_step))
+    tasks_list = TaskList.model_validate(tasks_list)
+    logger.info(f"Successfully validated {len(tasks_list.steps)} tasks")
+    logger.info(f"Task list: {json.dumps(tasks_list.model_dump(), indent=2)}")
 
-                tasks = TaskList(steps=fixed_steps)
-                logger.info(f"Tasks generated: {tasks}")
-                return tasks
-            except ValidationError as e:
-                logger.error(f"Validation error: {str(e)}")
-            except Exception as e:
-                logger.error(f"Error processing response: {str(e)}")
-        else:
-            logger.warning(f"No tool call in response (attempt {attempt + 1})")
-
-        # If we reach here, the response didn't contain a valid tool call or had validation errors
-        # Add a message to explicitly request using the tool with all required fields
-        user["content"] += (
-            "\n\nPlease use the 'route_agent' function to structure your response, ensuring ALL required fields (step_number, task, agent, expected_output, is_async) are included for each step."
-        )
-
-    # If we've exhausted all attempts, raise an exception
-    raise Exception("Failed to generate valid tasks after multiple attempts")
+    return tasks_list
 
 
-def route(task_object: TaskList, agent_manager: AgentManager):
-    results = []
-    for step in task_object.steps:
-        agent_name = step.agent
-        task = step.task
+def route(task_list: TaskList, agent_list: List[Agent]):
+    logger.info("Starting task routing process")
 
-        agent = agent_manager.get_agent(agent_name)
-        if agent:
-            is_async = step.is_async
-            expected_output = step.expected_output
+    for task in task_list.steps:
+        agent_name = task.agent
+        task_description = task.task
 
-            logger.info(
-                f"Routing task '{task}' to agent '{agent_name}' (Async: {is_async})"
-            )
-            logger.info(f"Expected output: {expected_output}")
+        logger.info(f"Routing task #{task.step_number} to agent '{agent_name}'")
 
-            result = execute(agent, task)
-            results.append(result)
-        else:
-            logger.error(f"Agent '{agent_name}' not found in agent list.")
-            results.append(
-                {"success": False, "error": f"Agent '{agent_name}' not found"}
-            )
+    logger.info("Task routing completed")
+    return "Agent routed"
 
-    return results
+    # agents = {agent["name"]: agent for agent in agent_list}
 
+    # for step in task_object:
+    #     agent_name = step.agent
+    #     task = step.task
 
-def execute(agent, task):
-    logger.info(f"Executing task for agent: {agent.name}")
+    #     if agent_name in agents:
+    #         agent = agents[agent_name]
+    #         is_async = step.is_async
 
-    system_message = {"role": "system", "content": agent.system_prompt}
-    user_message = {"role": "user", "content": task}
-
-    try:
-        response = ollama.chat(
-            model=MODEL,
-            messages=[system_message, user_message],
-            tools=[agent.input_payload],
-        )
-
-        logger.info(f"LLM response: {response}")
-
-        tool_call = response["message"].get("tool_calls", [{}])[0]
-        if tool_call:
-            function_args = tool_call["function"]["arguments"]
-            if isinstance(function_args, str):
-                function_args = json.loads(function_args)
-            result = agent.execute(function_args)
-            logger.info(f"Agent execution result: {result}")
-            return result
-        else:
-            logger.error("No valid tool call in LLM response")
-            return {"success": False, "error": "Failed to process LLM response"}
-    except Exception as e:
-        logger.error(f"Error executing task: {str(e)}")
-        return {"success": False, "error": f"Error executing task: {str(e)}"}
+    #         # Logic to execute agent
+    #         agent_response = agent.execute()
+    #         print(f"Routing task '{task}' to agent '{agent_name}' (Async: {is_async})")
+    #         print(agent_response)
+    #     else:
+    #         print(f"Agent '{agent_name}' not found in agent list.")

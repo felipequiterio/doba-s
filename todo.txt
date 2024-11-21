@@ -1,13 +1,22 @@
+
 - Adicionar lista de agentes no prompt
+-X Criar todo agent
+-X Criar funcoes de todo
 
-- Criar todo agent
-- Criar funcoes de todo
+--------------------------------------------------------------------------------------
 
--------------------
-
-- Refatorar llm.py como lib:
+-X Refatorar llm.py como lib:
     - llm.task
     - llm.query
 
-- Refatorar arquitetura de agents e tools
+-X Refatorar arquitetura de agents e tools 
 
+--------------------------------------------------------------------------------------
+
+-X Corrigir bug de task_description vazio no execute() do TodoAgent
+-X Consertar agent list no prompt de tasks
+-X Refazer tool call validation de tasks.generate()
+- Criar validacao de input na execute() do TodoAgent
+- Criar objeto generico de resultado para cada step
+
+--------------------------------------------------------------------------------------

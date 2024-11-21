@@ -1,14 +1,15 @@
 import os
-import llm.query
-import llm.task
-from stream import sync
-from dotenv import load_dotenv
 import llm
-from llm.initialize_agents import initialize_agents
+import llm.task
+import llm.query
+from stream import stream
+from typing import Dict, Any
+from dotenv import load_dotenv
+from llm.agent import AgentHandler
 from utils.log import get_custom_logger
 from colorama import init, Fore, Back, Style
+from llm.initialize_agents import initialize_agents
 
-# Inicializa o colorama para funcionar em todos os sistemas operacionais
 init()
 
 logger = get_custom_logger("MAIN")
@@ -17,6 +18,25 @@ load_dotenv()
 MODEL = os.getenv("MODEL")
 
 agent_manager, agent_list = initialize_agents()
+
+
+def extract_main_agent(payload: Dict[str, Any]) -> str:
+    """Extract the main agent from the routing payload."""
+    return payload["message"]["tool_calls"][0]["function"]["arguments"]["agent"]
+
+
+def handle_conversational_agent(message: str) -> None:
+    """Handle messages routed to the conversational agent."""
+    stream(message)
+
+
+def handle_tool_agent(message: str, agent_manager: AgentHandler) -> None:
+    """Handle messages routed to tool agents."""
+    task_object = llm.task.generate(message, agent_list)
+    results = llm.task.route(task_object, agent_manager)
+
+    for result in results:
+        print_result(result)
 
 
 def print_separator():
@@ -39,36 +59,36 @@ def print_result(result):
         print(Fore.WHITE + Back.RED + f"{result['error']}" + Style.RESET_ALL)
 
 
-def run_agent(message):
-    logger.info(f"Running agent with message: {message}")
+def run_agent(message: str, agent_manager: AgentHandler) -> None:
+    logger.info(f"Processing message: {message}")
+
     main_agent_payload = llm.query.route(message)
-    main_agent = main_agent_payload["message"]["tool_calls"][0]["function"][
-        "arguments"
-    ]["agent"]
-    logger.info(f"Main agent: {main_agent}")
+    main_agent = main_agent_payload["agent"]
+    logger.info(f"Routed to main agent: {main_agent}")
 
     if main_agent == "conversational":
-        sync(message)
-    elif main_agent == "tool":
-        task_object = llm.task.generate(message)
-        results = llm.task.route(task_object, agent_manager)
+        stream(message)
 
-        for result in results:
-            print_result(result)
+    elif main_agent == "tool":
+        task_list = llm.task.generate(message, agent_list)  # ERROR LINE
+        results = llm.task.route(task_list, agent_manager)
+        print_result(results)
+    else:
+        raise ValueError(f"Invalid agent type: {main_agent}")
 
 
 # Examples of usage
 examples = [
     "Hello, can you add 'buy groceries' to my todo list?",
-    "What tasks do I have on my todo list?",
-    "Can you mark the task 'buy groceries' as completed?",
-    "Please delete the task 'buy groceries' from my list",
-    "How's the weather today?",
+    # "What tasks do I have on my todo list?",
+    # "Can you mark the task 'buy groceries' as completed?",
+    # "Please delete the task 'buy groceries' from my list",
+    # "How's the weather today?",
 ]
 
 for i, example in enumerate(examples, 1):
     print_run_header(i, example)
-    run_agent(example)
+    run_agent(example, agent_manager)
     print("\n")
 
 print_separator()

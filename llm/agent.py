@@ -6,6 +6,11 @@ from abc import ABC, abstractmethod
 logger = get_custom_logger("AGENT")
 
 
+class AgentTask(BaseModel):
+    task: str
+    expected_output: str
+
+
 class Agent(BaseModel, ABC):
     name: str
     description: str
@@ -15,11 +20,11 @@ class Agent(BaseModel, ABC):
     data: Any
 
     @abstractmethod
-    def execute(self, arguments: Dict) -> Dict:
+    def execute(self, agent_task: AgentTask) -> Dict:
         pass
 
 
-class AgentManager:
+class AgentHandler:
     def __init__(self):
         self.agent_list: List[Agent] = []
 
