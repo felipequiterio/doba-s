@@ -1,47 +1,31 @@
 services:
-  llm-api:
-    build:
-      context: ..
-      dockerfile: ci/Dockerfile
-    container_name: llm_api
-    command: start.py
-    environment:
-      - MODEL_NAME=neuralmind/bert-base-portuguese-cased
-      - HUGGING_FACE_HUB_TOKEN=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
-      - PG_VECTOR_URL=postgresql://llm:llm@question_embedding/question_embedding
-      - NEO4J_URL=bolt://neo4j:7687
-      - NEO4J_USERNAME=neo4j
-      - NEO4J_PASSWORD=strongpassword123
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    ports:
-      - "8080:8080"
-    depends_on:
-      llm-database:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-    healthcheck:
-      test: "exit 0"
 
   llm-database:
     image: gcr.io/iptv-cluster/pgvector:v-0.0.1
-    container_name: question_embedding
+    container_name: vector_db
     environment:
-      POSTGRES_USER: llm
-      POSTGRES_PASSWORD: llm
-      POSTGRES_DB: question_embedding
+      POSTGRES_USER: vector_user
+      POSTGRES_PASSWORD: vector_password
+      POSTGRES_DB: vector_db
     ports:
       - "5433:5432"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
     healthcheck:
       test: "exit 0"
 
   neo4j:
     image: gcr.io/iptv-cluster/neo4j-custom/neo4j-5.24-0.0.1
-    container_name: neo4j
+    container_name: graph_db
     environment:
-      - NEO4J_AUTH=neo4j/strongpassword123
+      - NEO4J_AUTH=graph_user/graph_password
     ports:
       - "7474:7474"
       - "7687:7687"
+    volumes:
+      - ./volumes/neo4j/data:/data
+      - ./volumes/neo4j/logs:/logs
+      - ./volumes/neo4j/import:/import
+      - ./volumes/neo4j/plugins:/plugins
     healthcheck:
       test: "exit 0"
