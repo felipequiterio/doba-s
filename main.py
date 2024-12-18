@@ -70,8 +70,9 @@ def run_agent(message: str, agent_manager: AgentHandler) -> None:
         stream(message)
 
     elif main_agent == "tool":
-        task_list = llm.task.generate(message, agent_list)  # ERROR LINE
-        results = llm.task.route(task_list, agent_manager)
+        agent_list = agent_manager.get_list()
+        task_list = llm.task.generate(message, agent_list)
+        results = llm.task.route(task_list, agent_list)
         print_result(results)
     else:
         raise ValueError(f"Invalid agent type: {main_agent}")
