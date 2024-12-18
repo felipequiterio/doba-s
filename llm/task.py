@@ -1,15 +1,11 @@
-import os
 import json
 from typing import List
-from llm.agent import Agent
+from llm.agent import Agent, AgentTask
 from pydantic import BaseModel
-from dotenv import load_dotenv
 from llm.invoke import ollama_invoke
 from llm import get_arguments as get_arguments
 from utils.log import get_custom_logger
 
-load_dotenv()
-MODEL = os.getenv("MODEL")
 logger = get_custom_logger("TASK")
 
 tasks_payload = {
@@ -65,7 +61,7 @@ class TaskList(BaseModel):
     steps: List[Task]
 
 
-def generate(message, agent_list: List[Agent]) -> TaskList:
+def generate(user_message: str, agent_list: List[Agent]) -> TaskList:
     agents_available = "\n".join(
         [
             f"- **Name**: `{agent.name}`\n  **Description**: {agent.description}"
@@ -73,9 +69,7 @@ def generate(message, agent_list: List[Agent]) -> TaskList:
         ]
     )
 
-    system = system = {
-        "role": "system",
-        "content": f"""
+    system = f"""
                 You are an intelligent assistant responsible for routing queries to the appropriate agents.
                 When a query is simple and can be handled by a single agent, route it directly to that agent with the necessary task information.
                 
@@ -117,13 +111,11 @@ def generate(message, agent_list: List[Agent]) -> TaskList:
 
                 Available agents:
                 {agents_available}
-                """,
-    }
+                """
 
-    user = {"role": "user", "content": message}
-    logger.info(f"Sending task generation request with message: {message}")
+    logger.info(f"Sending task generation request with message: {user_message}")
 
-    response = ollama_invoke(system, user, tasks_payload)
+    response = ollama_invoke(system, user_message, tasks_payload)
 
     tasks = json.loads(response["steps"])
 
@@ -138,29 +130,36 @@ def generate(message, agent_list: List[Agent]) -> TaskList:
 
 def route(task_list: TaskList, agent_list: List[Agent]):
     logger.info("Starting task routing process")
+    results = []
+
+    agents = {agent.name.lower(): agent for agent in agent_list}
 
     for task in task_list.steps:
-        agent_name = task.agent
-        task_description = task.task
+        agent_name = task.agent.lower()
 
-        logger.info(f"Routing task #{task.step_number} to agent '{agent_name}'")
+        logger.info(f"[Task #{task.step_number}] Routing to {agent_name}: {task.task}")
+
+        if agent_name not in agents:
+            error_msg = f"Agent '{agent_name}' not found in agent list"
+            logger.error(error_msg)
+            results.append(
+                {"step": task.step_number, "status": "error", "message": error_msg}
+            )
+            continue
+
+        agent = agents[agent_name]
+        agent_task = AgentTask(task=task.task, expected_output=task.expected_output)
+
+        response = agent.execute(agent_task)
+        results.append(
+            {
+                "step": task.step_number,
+                "status": "success",
+                "result": response,
+                "is_async": task.is_async,
+            }
+        )
+        logger.info(f"Task [#{task.step_number}] completed successfully")
 
     logger.info("Task routing completed")
-    return "Agent routed"
-
-    # agents = {agent["name"]: agent for agent in agent_list}
-
-    # for step in task_object:
-    #     agent_name = step.agent
-    #     task = step.task
-
-    #     if agent_name in agents:
-    #         agent = agents[agent_name]
-    #         is_async = step.is_async
-
-    #         # Logic to execute agent
-    #         agent_response = agent.execute()
-    #         print(f"Routing task '{task}' to agent '{agent_name}' (Async: {is_async})")
-    #         print(agent_response)
-    #     else:
-    #         print(f"Agent '{agent_name}' not found in agent list.")
+    return results
