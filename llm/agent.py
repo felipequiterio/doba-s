@@ -17,7 +17,6 @@ class Agent(BaseModel, ABC):
     system_prompt: str
     input_payload: Dict
     output_payload: Dict
-    data: Any
 
     @abstractmethod
     def execute(self, agent_task: AgentTask) -> Dict:
