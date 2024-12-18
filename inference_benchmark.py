@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 
 load_dotenv()
-MODEL = os.getenv("MODEL")
+MODEL = os.getenv("OLLAMA_MODEL")
 
 
 # Function to get GPU stats using nvidia-smi
