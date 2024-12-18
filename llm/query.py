@@ -24,18 +24,14 @@ route_payload = {
 }
 
 
-def route(message):
+def route(user_message: str) -> dict:
     logger.info("Routing message")
 
-    system = {
-        "role": "system",
-        "content": """
+    system = """
             You are an intelligent assistant capable of routing queries. 
             If the user's query is conversational, route to conversational agent. 
             If it requires an action, route to the tool agent.
-            """,
-    }
+            """
 
-    user = {"role": "user", "content": message}
-    response = ollama_invoke(system, user, route_payload)
+    response = ollama_invoke(system, user_message, route_payload)
     return response
