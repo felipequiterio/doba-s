@@ -15,87 +15,94 @@ todo_action_payload = {
     "parameters": {
         "type": "object",
         "properties": {
-            "task": {"type": "string", "description": "The task description or query"},
-            "expected_output": {
-                "type": "string",
-                "description": "Expected output format or result",
-            },
             "action": {
-                "type": "string",
-                "enum": [
-                    "add",
-                    "update",
-                    "delete",
-                    "list",
-                    "list_by_status",
-                    "list_by_priority",
-                    "list_by_due_date",
-                ],
-                "description": "The action to perform on the todo list",
-            },
-        },
-        "required": ["task", "expected_output", "action"],
-    },
-}
-
-
-todo_task_payload = {
-    "name": "todo_task",
-    "description": "Manage todo list tasks",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_object": {
                 "type": "object",
-                "description": "A todo task with all required fields including the action to perform",
-                "properties": {
-                    "id": {
-                        "type": "integer",
-                        "description": "Task ID (use 0 for new tasks, must be an integer)",
-                        "default": 0,
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string", "enum": ["add"]},
+                            "title": {
+                                "type": "string",
+                                "description": "Title of the task",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Detailed description of the task",
+                            },
+                            "due_date": {
+                                "type": "string",
+                                "description": "Due date in YYYY-MM-DD format or 'none' if not applicable",
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                            },
+                        },
+                        "required": ["type", "title", "due_date", "priority"],
                     },
-                    "user_action": {
-                        "type": "string",
-                        "enum": ["add", "update", "delete", "list"],
-                        "description": "The action to perform on the todo list (REQUIRED)",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string", "enum": ["update"]},
+                            "id": {
+                                "type": "integer",
+                                "description": "ID of the task to update",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "New title of the task",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "New description of the task",
+                            },
+                            "due_date": {
+                                "type": "string",
+                                "description": "New due date in YYYY-MM-DD format or 'none' if not applicable",
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed"],
+                            },
+                        },
+                        "required": ["type", "id"],
                     },
-                    "task": {
-                        "type": "string",
-                        "description": "Description of the task",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string", "enum": ["delete"]},
+                            "id": {
+                                "type": "integer",
+                                "description": "ID of the task to delete",
+                            },
+                        },
+                        "required": ["type", "id"],
                     },
-                    "due_date": {
-                        "type": "string",
-                        "description": "Due date in YYYY-MM-DD format",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "action": {"type": "string", "enum": ["list"]},
+                            "filter": {
+                                "type": "string",
+                                "enum": ["all", "status", "priority", "due_date"],
+                            },
+                            "filter_value": {
+                                "type": "string",
+                                "description": "Value to filter by (if applicable)",
+                            },
+                        },
+                        "required": ["type", "filter"],
                     },
-                    "priority": {
-                        "type": "string",
-                        "enum": ["high", "medium", "low"],
-                        "default": "medium",
-                        "description": "Priority level of the task",
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "completed"],
-                        "default": "pending",
-                        "description": "Current status of the task",
-                    },
-                },
-                "required": ["user_action", "task"],
+                ],
             }
         },
-        "required": ["task_object"],
+        "required": ["action"],
     },
-}
-
-
-action_handler = {
-    "add": lambda item: add_task(item),
-    "update": lambda item: update_task(item),
-    "delete": lambda item: delete_task(item.id),
-    "list": lambda _: list_tasks(),
-    "list_by_status": lambda item: list_tasks_by_status(item.status),
-    "list_by_priority": lambda item: list_tasks_by_priority(item.priority),
-    "list_by_due_date": lambda item: list_tasks_by_due_date(item.due_date),
 }
 
 
@@ -118,193 +125,77 @@ class TodoAgent(Agent):
 
     def execute(self, agent_task: AgentTask) -> Dict:
         logger.info(f"Todo Agent executing task: {agent_task.task}")
+
         todo_task = ollama_invoke(
             system_message=self.system_prompt,
             user_message=agent_task.task,
-            payload=todo_task_payload,
+            payload=todo_action_payload,
         )
 
         logger.info(f"Todo Agent RESPONSE:\n {json.dumps(todo_task, indent=2)}")
 
-        # Handle both response formats
-        task_data = todo_task.get("task_object", todo_task)
-        action = task_data.get(
-            "user_action", "list"
-        )  # Default to list if not specified
-        logger.info(f"Todo Agent action: {action}")
+        action = todo_task["action"]
 
-        # Special handling for list action
-        if action == "list":
-            return action_handler[action](None)  # Pass None as unused parameter
+        match action["type"]:
+            case "add":
+                self.add_task(action)
+            case "update":
+                self.update_task(action)
+            case "delete":
+                self.delete_task(action)
+            case "list":
+                self.list_tasks(action)
 
-        # For other actions, create TodoPayload
-        todo_item = TodoPayload(
-            id=task_data.get("id", 0),
-            task=task_data.get("task", ""),
-            due_date=task_data.get("due_date", ""),
-            priority=task_data.get("priority", "medium"),
-            status=task_data.get("status", "pending"),
-        )
+        return todo_task
 
-        if action not in action_handler:
-            raise ValueError(f"Unknown action: {action}")
+    def add_task(self, task: Dict) -> Dict:
+        try:
+            todo_list = []
+            if (
+                os.path.exists("todo_list.json")
+                and os.path.getsize("todo_list.json") > 0
+            ):
+                with open("todo_list.json", "r") as f:
+                    todo_list = json.load(f)
+            else:
+                # Create the file with an empty list if it doesn't exist
+                with open("todo_list.json", "w") as f:
+                    json.dump([], f)
 
-        result = action_handler[action](todo_item)
-        result["action"] = action
-        return result
+            new_id = max([task.get("id", 0) for task in todo_list], default=0) + 1
 
-
-class TodoPayload(BaseModel):
-    id: int
-    task: str
-    due_date: str
-    priority: str  # high, medium, low
-    status: str  # pending, completed
-
-
-def _load_tasks():
-    try:
-        with open("todo_list.json", "r") as f:
-            content = f.read().strip()
-            if not content:  # File is empty
-                return {"tasks": []}
-            data = json.loads(content)
-            tasks = data.get("tasks", [])
-
-            # Create a new list instead of modifying during iteration
-            normalized_tasks = []
-            for i, task in enumerate(tasks):
-                if isinstance(task, str):
-                    normalized_tasks.append(
-                        {
-                            "id": i + 1,
-                            "task": task,
-                            "due_date": "",
-                            "priority": "medium",
-                            "status": "pending",
-                        }
-                    )
-                else:
-                    task_copy = task.copy()
-                    if isinstance(task_copy.get("id"), str):
-                        task_copy["id"] = int(task_copy["id"])
-                    normalized_tasks.append(task_copy)
-
-            return {"tasks": normalized_tasks}
-    except (FileNotFoundError, json.JSONDecodeError):
-        # Create the file with an empty task list
-        empty_data = {"tasks": []}
-        with open("todo_list.json", "w") as f:
-            json.dump(empty_data, f, indent=4)
-        return empty_data
-
-
-def _save_tasks(tasks):
-    with open("todo_list.json", "w") as f:
-        json.dump(tasks, f, indent=4)
-
-
-def add_task(task: TodoPayload):
-    data = _load_tasks()
-    tasks = data.get("tasks", [])
-
-    if task.id == 0:
-        existing_ids = [t["id"] for t in tasks if isinstance(t, dict)]
-        task.id = max(existing_ids, default=0) + 1
-
-    task_dict = task.model_dump()
-    task_dict["id"] = int(task_dict["id"])  # Ensure ID is integer
-
-    if not task_dict["priority"]:
-        task_dict["priority"] = "medium"
-    if not task_dict["status"]:
-        task_dict["status"] = "pending"
-    if not task_dict["due_date"]:
-        task_dict["due_date"] = ""
-
-    tasks.append(task_dict)
-    data["tasks"] = tasks
-    _save_tasks(data)
-    return {
-        "status": "success",
-        "message": "Task added successfully",
-        "data": [task_dict],
-    }
-
-
-def update_task(task: TodoPayload):
-    data = _load_tasks()
-
-    for i, existing_task in enumerate(data["tasks"]):
-        if existing_task["id"] == task.id:
-            data["tasks"][i] = task.model_dump()
-            _save_tasks(data)
-            return {
-                "status": "success",
-                "message": "Task updated successfully",
-                "data": [task.model_dump()],
+            new_task = {
+                "id": new_id,
+                "title": task["title"],
+                "description": task.get("description", ""),
+                "due_date": task["due_date"],
+                "priority": task["priority"],
+                "status": "pending",
             }
 
-    raise ValueError(f"Task with id {task.id} not found")
+            todo_list.append(new_task)
 
+            with open("todo_list.json", "w") as f:
+                json.dump(todo_list, f, indent=2)
 
-def delete_task(id: int):
-    data = _load_tasks()
-    data["tasks"] = [t for t in data["tasks"] if t["id"] != id]
-    _save_tasks(data)
-    return {
-        "status": "success",
-        "message": f"Task {id} deleted successfully",
-        "data": [],
-    }
+            logger.info(f"Task added successfully with ID: {new_id}")
+            return {
+                "status": "success",
+                "message": f"Task: #{new_id} - {task['title']} was added successfully",
+            }
 
+        except Exception as e:
+            logger.error(f"Error adding task: {str(e)}")
+            return {"status": "error", "message": f"Error adding task: {str(e)}"}
 
-def list_tasks():
-    data = _load_tasks()
-    tasks = [TodoPayload(**task) for task in data["tasks"]]
-    return {
-        "status": "success",
-        "message": "Retrieved all tasks",
-        "data": [t.model_dump() for t in tasks],
-    }
+    def update_task(self, task: Dict) -> Dict:
+        return logger.info("Task updated!")
 
+    def delete_task(self, task: Dict) -> Dict:
+        return logger.info("Task deleted!")
 
-def list_tasks_by_status(status: str):
-    tasks = [TodoPayload(**task) for task in _load_tasks()["tasks"]]
-    filtered_tasks = [task for task in tasks if task.status == status]
-    return {
-        "status": "success",
-        "message": f"Retrieved tasks with status: {status}",
-        "data": [t.model_dump() for t in filtered_tasks],
-    }
-
-
-def list_tasks_by_priority(priority: str):
-    tasks = [TodoPayload(**task) for task in _load_tasks()["tasks"]]
-    filtered_tasks = [task for task in tasks if task.priority == priority]
-    return {
-        "status": "success",
-        "message": f"Retrieved tasks with priority: {priority}",
-        "data": [t.model_dump() for t in filtered_tasks],
-    }
-
-
-def list_tasks_by_due_date(due_date: str):
-    tasks = [TodoPayload(**task) for task in _load_tasks()["tasks"]]
-    filtered_tasks = [task for task in tasks if task.due_date == due_date]
-    return {
-        "status": "success",
-        "message": f"Retrieved tasks with due date: {due_date}",
-        "data": [t.model_dump() for t in filtered_tasks],
-    }
-
-
-def get_task(task_id: int) -> Optional[TodoPayload]:
-    tasks = list_tasks()
-    for task in tasks:
-        if task.id == task_id:
-            return task
-    return None
+    def list_tasks(self, task: Dict) -> Dict:
+        return logger.info("Tasks listed!")
 
 
 def create_todo_agent() -> TodoAgent:
@@ -312,45 +203,59 @@ def create_todo_agent() -> TodoAgent:
     return TodoAgent(
         name="TodoAgent",
         description="Agent to manage todo list",
-        system_prompt="""You are a todo list manager that MUST ALWAYS include a user_action in your responses.
+        system_prompt="""You are a todo list manager that MUST ALWAYS return a complete action structure in your responses.
 
-        For every request, you must:
-        1. Determine the appropriate action (add/update/delete/list)
-        2. Include this action in the response as 'user_action'
-        3. Provide all required task details
+        Your response MUST ALWAYS follow this structure based on the action type:
 
-        When adding or updating tasks:
-        - Assign a unique ID to new tasks
-        - Validate that required fields are provided
-        - Maintain data consistency
-
-        Provide clear confirmations for all actions performed and format the output according to the expected structure.
-
-        IMPORTANT: Always include a 'user_action' field in your response, which must be one of: 
-        - 'add' for new tasks
-        - 'update' for modifying existing tasks
-        - 'delete' for removing tasks
-        - 'list' for viewing tasks
-
-        For every request, you must:
-        
-        1. Determine the appropriate action (add/update/delete/list)
-        2. Include this action in the response as 'user_action'
-        3. Provide all required task details
-
-        Example response format:
+        For ADD actions:
         {
-        "task_object": {
-            "user_action": "add",  <- THIS FIELD IS MANDATORY
-            "task": "Buy groceries",
-            "id": 0,
-            "due_date": "2024-03-20",
-            "priority": "medium",
-            "status": "pending"
-        }
+            "action": {
+                "type": "add",
+                "title": "task title",
+                "description": "detailed description",
+                "due_date": "YYYY-MM-DD",
+                "priority": "low|medium|high"
+            }
         }
 
+        For UPDATE actions:
+        {
+            "action": {
+                "type": "update",
+                "id": task_id,
+                "title": "new title",
+                "description": "new description",
+                "due_date": "YYYY-MM-DD",
+                "priority": "low|medium|high",
+                "status": "pending|in_progress|completed"
+            }
+        }
+
+        For DELETE actions:
+        {
+            "action": {
+                "type": "delete",
+                "id": task_id
+            }
+        }
+
+        For LIST actions:
+        {
+            "action": {
+                "type": "list",
+                "filter": "all|status|priority|due_date",
+                "filter_value": "value to filter by"
+            }
+        }
+
+        IMPORTANT:
+        1. NEVER return just the action type
+        2. ALWAYS include all required fields for the chosen action
+        3. Ensure the response matches exactly one of these structures
+        4. All dates must be in YYYY-MM-DD format
+        5. Priority must be one of: low, medium, high
+        6. Status must be one of: pending, in_progress, completed
         """,
-        input_payload=todo_task_payload,
-        output_payload=todo_task_payload,
+        input_payload=todo_action_payload,
+        output_payload=todo_action_payload,
     )
