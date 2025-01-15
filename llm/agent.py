@@ -1,5 +1,18 @@
+"""
+Agent Module
+
+This module provides a framework for managing AI agents and their tasks. It includes:
+
+- AgentTask: A model for defining tasks with expected outputs
+- Agent: An abstract base class for implementing different types of agents
+- AgentHandler: A manager class for registering and retrieving agents
+
+The module enables a flexible system for creating and managing various AI agents,
+each capable of executing specific tasks based on their implementation.
+"""
+
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict
 from utils.log import get_custom_logger
 from abc import ABC, abstractmethod
 
