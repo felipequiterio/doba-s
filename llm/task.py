@@ -1,3 +1,28 @@
+"""
+Task Management Module
+
+This module handles the routing and execution of tasks across multiple AI agents. It provides:
+
+Key Components:
+- Task Generation: Converts user messages into structured task lists
+- Task Routing: Distributes tasks to appropriate agents for execution
+- Task Models: Defines data structures for tasks using Pydantic
+
+Main Functions:
+- generate(): Creates a TaskList from user input, determining required steps and agents
+- route(): Executes tasks by dispatching them to appropriate agents
+
+The module supports both single-step and multi-step task execution, with capabilities for:
+- Asynchronous task handling
+- Sequential task ordering
+- Structured output validation
+- Error handling and logging
+
+Classes:
+- Task: Represents a single task with its properties
+- TaskList: Contains a collection of ordered tasks
+"""
+
 import json
 from typing import List
 from llm.agent import Agent, AgentTask
@@ -142,15 +167,23 @@ def route(task_list: TaskList, agent_list: List[Agent]):
         if agent_name not in agents:
             error_msg = f"Agent '{agent_name}' not found in agent list"
             logger.error(error_msg)
+
             results.append(
-                {"step": task.step_number, "status": "error", "message": error_msg}
+                {
+                    "step": task.step_number,
+                    "status": "error",
+                    "result": "None",
+                    "message": error_msg,
+                }
             )
             continue
 
         agent = agents[agent_name]
+
         agent_task = AgentTask(task=task.task, expected_output=task.expected_output)
 
         response = agent.execute(agent_task)
+
         results.append(
             {
                 "step": task.step_number,
