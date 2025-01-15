@@ -1,18 +1,18 @@
-{
-    "tasks": [
-        {
-            "id": 1,
-            "task": "buy groceries",
-            "due_date": "2024-03-20",
-            "priority": "medium",
-            "status": "pending"
-        },
-        {
-            "id": 2,
-            "task": "buy groceries",
-            "due_date": "",
-            "priority": "medium",
-            "status": "pending"
-        }
-    ]
-}
+[
+  {
+    "id": 1,
+    "title": "Buy groceries",
+    "description": "",
+    "due_date": "",
+    "priority": "low",
+    "status": "pending"
+  },
+  {
+    "id": 2,
+    "title": "Buy groceries",
+    "description": "Milk, bread, eggs",
+    "due_date": "2023-12-31",
+    "priority": "low",
+    "status": "pending"
+  }
+]
