@@ -4,10 +4,11 @@ import llm.task
 import llm.query
 from llm.stream import stream
 from dotenv import load_dotenv
-from llm.agent import AgentHandler
+from llm.agent import AgentHandler, run_agent
 from utils.log import get_custom_logger
 from colorama import init, Fore, Back, Style
 from llm.initialize_agents import initialize_agents
+from utils.printing import print_run_header, print_separator
 
 # Initialize colorama
 init()
@@ -23,19 +24,19 @@ MODEL = os.getenv("MODEL")
 agent_manager, agent_list = initialize_agents()
 
 
-def print_separator():
-    print(Fore.YELLOW + "=" * 80 + Style.RESET_ALL)
+# def print_separator():
+#     print(Fore.YELLOW + "=" * 80 + Style.RESET_ALL)
 
 
-def print_run_header(run_number, message):
-    print_separator()
-    print(Fore.CYAN + f"RUN {run_number}".center(80) + Style.RESET_ALL)
-    print(Fore.GREEN + f"Input: {message}" + Style.RESET_ALL)
-    print_separator()
+# def print_run_header(run_number, message):
+#     print_separator()
+#     print(Fore.CYAN + f"RUN {run_number}".center(80) + Style.RESET_ALL)
+#     print(Fore.GREEN + f"Input: {message}" + Style.RESET_ALL)
+#     print_separator()
 
 
 def print_result(result):
-    if result["success"]:
+    if result["status"] == "success":
         print(Fore.GREEN + "Task completed successfully:" + Style.RESET_ALL)
         print(Fore.WHITE + Back.GREEN + f"{result['result']}" + Style.RESET_ALL)
     else:
@@ -43,35 +44,38 @@ def print_result(result):
         print(Fore.WHITE + Back.RED + f"{result['error']}" + Style.RESET_ALL)
 
 
-def run_agent(message: str, agent_manager: AgentHandler) -> None:
-    logger.info(f"Processing message: {message}")
+# def run_agent(message: str, agent_manager: AgentHandler) -> None:
+#     logger.info(f"Processing message: {message}")
 
-    # Determine if message should be handled conversationally or by a tool
-    query_route = llm.query.route(message)
-    agent_type = query_route["agent"]
-    logger.info(f"Message routed to {agent_type} agent")
+#     # Determine if message should be handled conversationally or by a tool
+#     query_route = llm.query.route(message)
+#     agent_type = query_route["agent"]
+#     logger.info(f"Message routed to {agent_type} agent")
 
-    match agent_type:
-        case "conversational":
-            # Handle conversational messages by streaming response
-            stream(message)
+#     match agent_type:
+#         case "conversational":
+#             # Handle conversational messages by streaming response
+#             stream(message)
 
-        case "tool":
-            # Handle tool requests by generating and routing specific tasks
-            available_agents = agent_manager.get_list()
-            tasks = llm.task.generate(message, available_agents)
-            results = llm.task.route(tasks, available_agents)
-            print_result(results)
+#         case "tool":
+#             # Handle tool requests by generating and routing specific tasks
+#             available_agents = agent_manager.get_list()
+#             tasks = llm.task.generate(message, available_agents)
+#             results = llm.task.route(tasks, available_agents)
+#             for result in results:
+#                 print_result(result)
+#             final_answer = llm.task.generate_final_answer(message, results)
+#             stream(final_answer)
 
-        case _:
-            raise ValueError(f"Invalid agent type: {agent_type}")
+#         case _:
+#             raise ValueError(f"Invalid agent type: {agent_type}")
 
 
 # Examples of usage
 examples = [
-    "Hello, can you add 'buy groceries' to my todo list?",
+    "Hello, can you add 'dede boiola' to my todo list and mark task of id 3 as completed?",
     # "What tasks do I have on my todo list?",
-    # "Can you mark the task 'buy groceries' as completed?",
+    # "Can you mark the task with index 2 as completed?",
     # "Please delete the task 'buy groceries' from my list",
     # "How's the weather today?",
 ]

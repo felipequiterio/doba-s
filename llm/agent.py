@@ -13,8 +13,12 @@ each capable of executing specific tasks based on their implementation.
 
 from pydantic import BaseModel
 from typing import List, Dict
+import llm
+from llm import stream
 from utils.log import get_custom_logger
 from abc import ABC, abstractmethod
+
+# from utils.printing import print_result
 
 logger = get_custom_logger("AGENT")
 
@@ -53,3 +57,31 @@ class AgentHandler:
             if agent.name == name:
                 return agent
         return None
+
+
+def run_agent(message: str, agent_manager: AgentHandler) -> None:
+    logger.info(f"Processing message: {message}")
+
+    # Determine if message should be handled conversationally or by a tool
+    query_route = llm.query.route(message)
+    agent_type = query_route["agent"]
+    logger.info(f"Message routed to {agent_type} agent")
+
+    match agent_type:
+        case "conversational":
+            # Handle conversational messages by streaming response
+            stream(message)
+
+        case "tool":
+            # Handle tool requests by generating and routing specific tasks
+            available_agents = agent_manager.get_list()
+            tasks = llm.task.generate(message, available_agents)
+            results = llm.task.route(tasks, available_agents)
+            for result in results:
+                print(result)
+            final_answer = llm.task.generate_final_answer(message, results)
+            # stream(final_answer)
+            print(final_answer)
+
+        case _:
+            raise ValueError(f"Invalid agent type: {agent_type}")
