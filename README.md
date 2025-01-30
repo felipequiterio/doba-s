@@ -18,30 +18,35 @@ DOBA-S is an intelligent task management system that dynamically routes user que
 ## Installation
 
 1. Install the uv Python package manager:
-   ```
+
+   ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
 2. Clone the repository:
-   ```
+
+   ```bash
    git clone https://github.com/yourusername/doba-s.git
    cd doba-s
    ```
 
 3. Set up a virtual environment:
-   ```
+
+   ```bash
    uv venv
    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
    ```
 
 4. Install the required packages:
-   ```
+
+   ```bash
    uv sync
    ```
 
 5. Set up environment variables:
    Create a `.env` file in the root directory and add the following:
-   ```
+
+   ```bash
    MODEL=your_model_name
    ```
 
