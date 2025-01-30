@@ -16,35 +16,27 @@ class CustomFormatter(logging.Formatter):
     }
 
     def format(self, record):
-        log_color = self.LOG_COLORS.get(record.levelno)
+        # Get the original formatted message
+        formatted_msg = super().format(record)
 
-        # Get the caller's frame information
-        frame = inspect.currentframe()
-        # Go back 3 frames to get the actual caller (adjust if needed)
-        for _ in range(3):
-            if frame.f_back:
-                frame = frame.f_back
+        try:
+            # Get the file path from record
+            file_path = Path(record.pathname)
 
-        # Extract file path and convert to relative path
-        file_path = Path(frame.f_code.co_filename).relative_to(Path.cwd())
-        func_name = frame.f_code.co_name
-        line_no = frame.f_lineno
+            # Try to make it relative if it's in our project
+            try:
+                relative_path = file_path.relative_to(Path.cwd())
+                location = f"{relative_path}:{record.lineno}"
+            except ValueError:
+                # For system files, just use filename
+                location = f"{file_path.name}:{record.lineno}"
 
-        # Format the location info
-        location = f"{file_path}:{line_no} in {func_name}()"
+            # Return formatted message with location
+            return f"{location} - {formatted_msg}"
 
-        # Format the log header with module name and level
-        log_header = f"[{record.name} {record.levelname}]"
-
-        # Format the full message
-        if record.exc_info:
-            # If there's an exception, include it in the message
-            exc_info = self.formatException(record.exc_info)
-            full_message = f"{log_color}{log_header}{Style.RESET_ALL} {location}\n{record.getMessage()}\n{exc_info}"
-        else:
-            full_message = f"{log_color}{log_header}{Style.RESET_ALL} {location}\n{record.getMessage()}"
-
-        return full_message
+        except Exception:
+            # Fallback to just the message if anything goes wrong
+            return formatted_msg
 
 
 def get_custom_logger(name):
