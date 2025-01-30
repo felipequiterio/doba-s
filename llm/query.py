@@ -1,5 +1,5 @@
 import os
-from llm.invoke import ollama_invoke
+from llm.invoke import model_invoke
 from dotenv import load_dotenv
 from utils.log import get_custom_logger
 
@@ -33,5 +33,5 @@ def route(user_message: str) -> dict:
             If it requires an action, route to the tool agent.
             """
 
-    response = ollama_invoke(system, user_message, route_payload)
+    response = model_invoke(system, user_message, route_payload)
     return response

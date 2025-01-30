@@ -24,10 +24,10 @@ Classes:
 """
 
 import json
-from typing import List
+from typing import Dict, List
 from llm.agent import Agent, AgentTask
 from pydantic import BaseModel
-from llm.invoke import ollama_invoke
+from llm.invoke import model_invoke
 from llm import get_arguments as get_arguments
 from utils.log import get_custom_logger
 
@@ -140,7 +140,8 @@ def generate(user_message: str, agent_list: List[Agent]) -> TaskList:
 
     logger.info(f"Sending task generation request with message: {user_message}")
 
-    response = ollama_invoke(system, user_message, tasks_payload)
+    response = model_invoke(system, user_message, tasks_payload)
+    logger.info(f"Generation response: {response}")
 
     tasks = json.loads(response["steps"])
 
@@ -196,3 +197,12 @@ def route(task_list: TaskList, agent_list: List[Agent]):
 
     logger.info("Task routing completed")
     return results
+
+
+def generate_final_answer(message: str, results: List[Dict]) -> str:
+    system = """
+            You are an intelligent assistant responsible for generating a final answer based on the results of the tasks.
+            """
+    response = model_invoke(system, message, None)
+    print(f"Final answer: {response}")
+    return response
